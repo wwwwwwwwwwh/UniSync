@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'theme/app_theme.dart';
+import 'widgets/pixel_card.dart';
+import 'widgets/pixel_button.dart';
+import 'widgets/pixel_input.dart';
 
 class VaultPage extends StatefulWidget {
   const VaultPage({super.key});
@@ -49,9 +53,7 @@ class _VaultPageState extends State<VaultPage> {
     final isIncome = (e['is_income'] as bool?) ?? false;
 
     final categoryRaw = e['category'];
-    final category = (categoryRaw ??
-            (isIncome ? 'Income' : 'Uncategorized'))
-        .toString();
+    final category = (categoryRaw ?? (isIncome ? 'Income' : 'Uncategorized')).toString();
 
     final amount = (e['amount'] as num?) ?? 0;
     final desc = (e['description'] ?? '').toString();
@@ -60,79 +62,75 @@ class _VaultPageState extends State<VaultPage> {
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,
+      backgroundColor: AppColors.surface,
       builder: (ctx) {
+        final nav = Navigator.of(ctx);
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-              ),
+              Text(title, style: AppTextStyles.pixelHeader.copyWith(fontSize: 18)),
               const SizedBox(height: 6),
               Text(
                 '${isIncome ? "Income" : "Expense"} • $category'
                 '${createdAt == null ? "" : " • ${DateFormat('dd MMM, HH:mm').format(createdAt)}"}',
+                style: AppTextStyles.pixelBody.copyWith(fontSize: 12, color: AppColors.subtle),
               ),
               const SizedBox(height: 10),
               Text(
                 'RM ${amount.toStringAsFixed(2)}',
-                style: TextStyle(
+                style: AppTextStyles.pixelTitle.copyWith(
                   fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: isIncome ? Colors.green : Colors.red,
+                  color: isIncome ? AppColors.secondary : Colors.red,
                 ),
               ),
               const SizedBox(height: 12),
 
               if (desc.trim().isNotEmpty) ...[
-                const Text('Description', style: TextStyle(fontWeight: FontWeight.w700)),
+                Text('Description', style: AppTextStyles.pixelBody.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
-                Text(desc),
+                Text(desc, style: AppTextStyles.pixelBody),
                 const SizedBox(height: 12),
               ],
 
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Close'),
+                    child: PixelButton(
+                      text: 'Close',
+                      onPressed: () => nav.pop(),
+                      color: AppColors.surface,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: FilledButton.icon(
-                      icon: const Icon(Icons.delete),
-                      label: const Text('Delete'),
+                    child: PixelButton(
+                      text: 'Delete',
                       onPressed: () async {
-                        final nav = Navigator.of(ctx);
-
                         final confirm = await showDialog<bool>(
                           context: ctx,
                           builder: (dctx) => AlertDialog(
-                            title: const Text('Delete record?'),
+                             backgroundColor: AppColors.surface,
+                             shape: BeveledRectangleBorder(side: BorderSide(color: AppColors.text, width: 2)),
+                            title: const Text('Delete record?', style: TextStyle(fontWeight: FontWeight.bold)),
                             content: const Text('This action cannot be undone.'),
                             actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(dctx, false),
-                                child: const Text('Cancel'),
-                              ),
-                              FilledButton(
-                                onPressed: () => Navigator.pop(dctx, true),
-                                child: const Text('Delete'),
-                              ),
+                              PixelButton(onPressed: () => Navigator.pop(dctx, false), text: 'Cancel', width: 80, color: AppColors.background),
+                              const SizedBox(width: 8),
+                              PixelButton(onPressed: () => Navigator.pop(dctx, true), text: 'Delete', width: 80, color: Colors.redAccent, textColor: Colors.white),
                             ],
                           ),
                         );
 
                         if (confirm == true) {
-                          nav.pop(); // close sheet
+                          nav.pop();
                           await _delete(id);
                         }
                       },
+                      color: Colors.redAccent, 
+                      textColor: Colors.white,
                     ),
                   ),
                 ],
@@ -165,13 +163,18 @@ class _VaultPageState extends State<VaultPage> {
     final balance = totalIncome - totalExpense;
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : RefreshIndicator(
               onRefresh: _load,
+              color: AppColors.primary,
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                   Text('Vault', style: AppTextStyles.pixelTitle),
+                   const SizedBox(height: 16),
+
                   _SummaryCard(
                     totalIncome: currency.format(totalIncome),
                     totalExpense: currency.format(totalExpense),
@@ -179,85 +182,93 @@ class _VaultPageState extends State<VaultPage> {
                   ),
                   const SizedBox(height: 12),
 
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () async {
-                            final added = await Navigator.push<bool>(
-                              context,
-                              MaterialPageRoute(builder: (_) => const AddExpensePage()),
-                            );
-                            if (added == true) {
-                              _load();
-                            }
-                          },
-                          icon: const Icon(Icons.add),
-                          label: const Text('Add'),
-                        ),
-                      ),
-                    ],
-                  ),
+                   PixelButton(
+                     text: '+ ADD RECORD',
+                     onPressed: () async {
+                        final added = await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AddExpensePage()),
+                        );
+                        if (added == true) {
+                          _load();
+                        }
+                     },
+                     color: AppColors.secondary,
+                   ),
 
-                  const SizedBox(height: 12),
-                  Text('History', style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 24),
+                  Text('History', style: AppTextStyles.pixelHeader),
                   const SizedBox(height: 8),
 
                   if (items.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Center(child: Text('No records yet. Tap Add to start.')),
+                     Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Center(child: Text('No records yet. Tap Add to start.', style: AppTextStyles.pixelBody)),
                     )
                   else
                     ...items.map((e) {
                       final title = (e['title'] ?? '-') as String;
-
                       final isIncome = (e['is_income'] as bool?) ?? false;
-
                       final categoryRaw = e['category'];
-                      final category = (categoryRaw ??
-                              (isIncome ? 'Income' : 'Uncategorized'))
-                          .toString();
-
+                      final category = (categoryRaw ?? (isIncome ? 'Income' : 'Uncategorized')).toString();
                       final amount = (e['amount'] as num?) ?? 0;
                       final createdAt = DateTime.tryParse(e['created_at']?.toString() ?? '');
+                      final hasDesc = (e['description'] ?? '').toString().trim().isNotEmpty;
 
-                      final hasDesc = (e['description'] ?? '')
-                          .toString()
-                          .trim()
-                          .isNotEmpty;
-
-                      return Card(
-                        child: ListTile(
-                          leading: Icon(
-                            isIncome ? Icons.north_east : Icons.south_west, // fixed direction
-                          ),
-                          title: Row(
-                            children: [
-                              Expanded(child: Text(title)),
-                              if (hasDesc)
-                                const Icon(Icons.sticky_note_2_outlined, size: 16),
-                            ],
-                          ),
-                          subtitle: Text(
-                            '$category • ${createdAt == null ? '-' : DateFormat('dd MMM, HH:mm').format(createdAt)}',
-                          ),
-                          trailing: Text(
-                            (isIncome ? '+' : '-') +
-                                currency.format(amount).replaceFirst('RM ', ''),
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: isIncome ? Colors.green : Colors.red,
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: PixelCard(
+                          backgroundColor: AppColors.surface,
+                          child: InkWell(
+                            onTap: () => _openRecordMenu(e),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 40, height: 40,
+                                  decoration: BoxDecoration(
+                                    color: isIncome ? AppColors.secondary.withValues(alpha: 0.2) : Colors.redAccent.withValues(alpha: 0.1),
+                                    border: Border.all(color: AppColors.text, width: 2),
+                                  ),
+                                  child: Icon(
+                                    isIncome ? Icons.north_east : Icons.south_west,
+                                    color: AppColors.text,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(child: Text(title, style: AppTextStyles.pixelHeader.copyWith(fontSize: 14))),
+                                          if (hasDesc) const Icon(Icons.sticky_note_2_outlined, size: 14),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '$category • ${createdAt == null ? '-' : DateFormat('dd MMM').format(createdAt)}',
+                                        style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  (isIncome ? '+' : '-') + currency.format(amount).replaceFirst('RM ', ''),
+                                  style: AppTextStyles.pixelBody.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: isIncome ? AppColors.secondary : Colors.redAccent, // Green is bad for pastel theme, using secondary (Mint)
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          onTap: () => _openRecordMenu(e),
-                          onLongPress: () => _openRecordMenu(e), // optional: keep for power users
                         ),
                       );
                     }),
 
-                  const SizedBox(height: 40),
-                  const Text('Tip: Tap a record to view details or delete.'),
+                  const SizedBox(height: 60),
                 ],
               ),
             ),
@@ -278,35 +289,35 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('This Month', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _kv('Income', totalIncome)),
-                Expanded(child: _kv('Expense', totalExpense)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _kv('Balance', balance),
-          ],
-        ),
+    return PixelCard(
+      backgroundColor: AppColors.primary, 
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('This Month', style: AppTextStyles.pixelHeader.copyWith(fontSize: 14, color: AppColors.surface)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _kv('Income', totalIncome)),
+              Expanded(child: _kv('Expense', totalExpense)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(height: 2, color: AppColors.surface),
+          const SizedBox(height: 12),
+          _kv('Balance', balance, isLarge: true),
+        ],
       ),
     );
   }
 
-  Widget _kv(String k, String v) {
+  Widget _kv(String k, String v, {bool isLarge = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(k, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
-        Text(v, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        Text(k, style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle)), // Subtle Wood Light
+        const SizedBox(height: 2),
+        Text(v, style: AppTextStyles.pixelHeader.copyWith(fontSize: isLarge ? 24 : 16, color: AppColors.surface)),
       ],
     );
   }
@@ -377,7 +388,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Record')),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: Text('Add Record', style: AppTextStyles.pixelHeader), backgroundColor: AppColors.background),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -385,61 +397,55 @@ class _AddExpensePageState extends State<AddExpensePage> {
             children: [
               Expanded(
                 child: _ModeTile(
-                  label: 'Income',
-                  selected: isIncome == true,
-                  onTap: () => setState(() => isIncome = true),
+                  label: 'Expense',
+                  selected: isIncome == false,
+                  onTap: () => setState(() => isIncome = false),
+                  color: Colors.redAccent.withValues(alpha: 0.2),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _ModeTile(
-                  label: 'Expense',
-                  selected: isIncome == false,
-                  onTap: () => setState(() => isIncome = false),
+                  label: 'Income',
+                  selected: isIncome == true,
+                  onTap: () => setState(() => isIncome = true),
+                  color: AppColors.secondary,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
 
-          TextField(
+          PixelInput(
+            hintText: isIncome ? 'Title (e.g. Salary)' : 'Title (e.g. Chicken Rice)',
             controller: titleCtrl,
-            decoration: InputDecoration(
-              labelText: isIncome
-                  ? 'Title (e.g., Allowance / Salary)'
-                  : 'Title (e.g., Chicken Rice)',
-            ),
           ),
           const SizedBox(height: 12),
 
-          TextField(
+          PixelInput(
+            hintText: 'Amount (e.g. 12.50)',
             controller: amountCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Amount (e.g., 12.50)'),
           ),
           const SizedBox(height: 12),
 
           if (!isIncome) ...[
-            TextField(
+            PixelInput(
+              hintText: 'Category',
               controller: categoryCtrl,
-              decoration: const InputDecoration(labelText: 'Category (Food/Transport/etc)'),
             ),
             const SizedBox(height: 12),
           ],
 
-          TextField(
+          PixelInput(
+            hintText: 'Description (optional)',
             controller: descCtrl,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Description (optional)',
-              alignLabelWithHint: true,
-            ),
           ),
           const SizedBox(height: 20),
 
-          FilledButton(
-            onPressed: loading ? null : _save,
-            child: Text(loading ? 'Saving...' : 'Save'),
+          PixelButton(
+            text: loading ? 'SAVING...' : 'SAVE',
+            onPressed: loading ? () {} : _save,
+            color: AppColors.secondary,
           ),
         ],
       ),
@@ -451,38 +457,36 @@ class _ModeTile extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final Color color;
 
   const _ModeTile({
     required this.label,
     required this.selected,
     required this.onTap,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
+    return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+      child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
+          color: selected ? color : AppColors.surface,
           border: Border.all(
             width: 2,
-            color: selected ? primary : Colors.black12,
+            color: AppColors.text, // Always black border for pixel art
           ),
-          color: selected ? primary.withValues(alpha: 0.12) : null,
+          boxShadow: selected 
+              ? [] // Pressed effect (no shadow)
+              : const [BoxShadow(color: AppColors.shadow, offset: Offset(2, 2), blurRadius: 0)],
         ),
+        transform: selected ? Matrix4.translationValues(2, 2, 0) : Matrix4.identity(),
         child: Center(
           child: Text(
             label,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: selected ? primary : null,
-            ),
+            style: AppTextStyles.pixelHeader.copyWith(fontSize: 14),
           ),
         ),
       ),

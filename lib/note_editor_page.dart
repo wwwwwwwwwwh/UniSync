@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'theme/app_theme.dart';
+import 'widgets/pixel_button.dart';
+import 'widgets/pixel_input.dart';
+import 'widgets/pixel_card.dart';
 
 class NoteEditorPage extends StatefulWidget {
   const NoteEditorPage({super.key});
@@ -53,37 +57,52 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('New Note')),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: Text('New Note', style: AppTextStyles.pixelHeader),
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: AppColors.text),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(
+          PixelInput(
+            hintText: 'Title',
             controller: titleCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Title',
-              border: OutlineInputBorder(),
-            ),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: bodyCtrl,
-            maxLines: 8,
-            decoration: const InputDecoration(
-              labelText: 'Note (optional)',
-              alignLabelWithHint: true,
-              border: OutlineInputBorder(),
-            ),
+          
+          Container(
+             decoration: BoxDecoration(
+                color: AppColors.surface,
+                border: Border.all(color: AppColors.text, width: 2),
+                boxShadow: const [BoxShadow(color: AppColors.shadow, offset: Offset(4, 4), blurRadius: 0)],
+             ),
+             padding: const EdgeInsets.all(12),
+             child: TextField(
+               controller: bodyCtrl,
+               maxLines: 10,
+               style: AppTextStyles.pixelBody,
+               decoration: InputDecoration(
+                 border: InputBorder.none,
+                 hintText: 'Note (optional)...',
+                 hintStyle: AppTextStyles.pixelBody.copyWith(color: AppColors.subtle),
+               ),
+             ),
           ),
           const SizedBox(height: 16),
-          FilledButton(
+          
+          PixelButton(
+            text: saving ? 'SAVING...' : 'SAVE',
             onPressed: saving
-                ? null
+                ? () {}
                 : () async {
                     final created = await _save();
                     if (!mounted) return;
                     if (created != null) Navigator.pop(context, created);
                   },
-            child: Text(saving ? 'Saving...' : 'Save'),
+            color: AppColors.secondary,
           ),
         ],
       ),

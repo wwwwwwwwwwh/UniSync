@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'pomodoro_page.dart';
+import 'theme/app_theme.dart';
+import 'widgets/pixel_card.dart';
+import 'widgets/pixel_button.dart';
+import 'widgets/pixel_input.dart';
 
 class FocusPage extends StatefulWidget {
   const FocusPage({super.key});
@@ -56,30 +60,21 @@ class _FocusPageState extends State<FocusPage> {
 
   IconData _catIcon(String cat) {
     switch (cat) {
-      case 'Finance':
-        return Icons.savings_outlined;
-      case 'Personal':
-        return Icons.fitness_center_outlined;
-      case 'Project':
-        return Icons.construction_outlined;
+      case 'Finance': return Icons.savings_outlined;
+      case 'Personal': return Icons.fitness_center_outlined;
+      case 'Project': return Icons.construction_outlined;
       case 'Study':
-      default:
-        return Icons.menu_book_outlined;
+      default: return Icons.menu_book_outlined;
     }
   }
 
   Color _catColor(String cat) {
-    // Soft, not weird
     switch (cat) {
-      case 'Finance':
-        return const Color(0xFF2E7D32); // green
-      case 'Personal':
-        return const Color(0xFF1565C0); // blue
-      case 'Project':
-        return const Color(0xFF6A1B9A); // purple
+      case 'Finance': return const Color(0xFF66BB6A);
+      case 'Personal': return const Color(0xFF42A5F5);
+      case 'Project': return const Color(0xFFAB47BC);
       case 'Study':
-      default:
-        return const Color(0xFFEF6C00); // orange
+      default: return const Color(0xFFFFA726);
     }
   }
 
@@ -98,7 +93,7 @@ class _FocusPageState extends State<FocusPage> {
       return '$cat • $days day${days == 1 ? "" : "s"} left';
     } else {
       final hours = diff.inHours;
-      final display = hours <= 0 ? 1 : hours; // avoid "0 hours left"
+      final display = hours <= 0 ? 1 : hours;
       return '$cat • $display hour${display == 1 ? "" : "s"} left';
     }
   }
@@ -107,6 +102,7 @@ class _FocusPageState extends State<FocusPage> {
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,
+      backgroundColor: AppColors.surface,
       builder: (ctx) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -115,7 +111,7 @@ class _FocusPageState extends State<FocusPage> {
             children: [
               ListTile(
                 leading: const Icon(Icons.add),
-                title: const Text('Add Quest'),
+                title: Text('Add Quest', style: AppTextStyles.pixelBody),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final added = await Navigator.push<bool>(
@@ -127,7 +123,7 @@ class _FocusPageState extends State<FocusPage> {
               ),
               ListTile(
                 leading: const Icon(Icons.history),
-                title: Text('History (${doneTasks.length})'),
+                title: Text('History (${doneTasks.length})', style: AppTextStyles.pixelBody),
                 onTap: () {
                   Navigator.pop(ctx);
                   _openHistorySheet(doneTasks);
@@ -135,7 +131,7 @@ class _FocusPageState extends State<FocusPage> {
               ),
               ListTile(
                 leading: const Icon(Icons.timer),
-                title: const Text('Focus Mode'),
+                title: Text('Focus Mode', style: AppTextStyles.pixelBody),
                 onTap: () {
                   Navigator.pop(ctx);
                   Navigator.push(
@@ -163,42 +159,45 @@ class _FocusPageState extends State<FocusPage> {
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,
+      backgroundColor: AppColors.surface,
       builder: (ctx) {
-        final nav = Navigator.of(ctx); // store before any await
+        final nav = Navigator.of(ctx);
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(subject, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              Text(subject, style: AppTextStyles.pixelHeader.copyWith(fontSize: 18)),
               const SizedBox(height: 6),
               Text(
                 '${category} • ${isDifficult ? "🚩 Difficult" : "Normal"}'
                 '${deadline == null ? "" : " • Due ${DateFormat('dd MMM, HH:mm').format(deadline)}"}',
+                style: AppTextStyles.pixelBody.copyWith(fontSize: 12, color: AppColors.subtle),
               ),
               const SizedBox(height: 12),
 
               if (desc.trim().isNotEmpty) ...[
-                const Text('Details', style: TextStyle(fontWeight: FontWeight.w700)),
+                Text('Details', style: AppTextStyles.pixelBody.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
-                Text(desc),
+                Text(desc, style: AppTextStyles.pixelBody),
                 const SizedBox(height: 12),
               ],
 
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
+                    child: PixelButton(
+                      text: 'Close',
                       onPressed: () => nav.pop(),
-                      child: const Text('Close'),
+                      color: AppColors.surface,
+                      textColor: AppColors.text, // Fix: Dark text on white button
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: FilledButton.icon(
-                      icon: const Icon(Icons.delete),
-                      label: const Text('Delete'),
+                    child: PixelButton(
+                      text: 'Delete',
                       onPressed: () async {
                         final confirm = await showDialog<bool>(
                           context: ctx,
@@ -216,18 +215,21 @@ class _FocusPageState extends State<FocusPage> {
                           await _delete(id);
                         }
                       },
+                      color: Colors.redAccent,
+                      textColor: Colors.white,
                     ),
                   ),
                 ],
               ),
 
               const SizedBox(height: 10),
-              FilledButton(
+              PixelButton(
+                text: isDone ? 'Mark as Undone' : 'Mark as Done',
                 onPressed: () async {
                   nav.pop();
                   await _toggleComplete(id, !isDone);
                 },
-                child: Text(isDone ? 'Mark as Undone' : 'Mark as Done'),
+                color: AppColors.secondary,
               ),
             ],
           ),
@@ -241,8 +243,9 @@ class _FocusPageState extends State<FocusPage> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
+      backgroundColor: AppColors.surface,
       builder: (ctx) {
-        final nav = Navigator.of(ctx); // store before any await
+        final nav = Navigator.of(ctx);
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -251,10 +254,10 @@ class _FocusPageState extends State<FocusPage> {
               children: [
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'Completed Quests',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                        style: AppTextStyles.pixelHeader.copyWith(fontSize: 18),
                       ),
                     ),
                     IconButton(
@@ -267,15 +270,16 @@ class _FocusPageState extends State<FocusPage> {
                 const SizedBox(height: 8),
 
                 if (doneTasks.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text('No completed quests yet.'),
+                   Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text('No completed quests yet.', style: AppTextStyles.pixelBody),
                   )
                 else
                   Flexible(
-                    child: ListView.builder(
+                    child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: doneTasks.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, i) {
                         final t = doneTasks[i];
                         final id = t['id'] as int;
@@ -285,27 +289,35 @@ class _FocusPageState extends State<FocusPage> {
 
                         final color = _catColor(cat);
 
-                        return Card(
-                          shape: RoundedRectangleBorder(
-                            side: BorderSide(color: color.withValues(alpha: 0.35), width: 1.5),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: ListTile(
-                            leading: Icon(_catIcon(cat), color: color),
-                            title: Text(subject, style: const TextStyle(fontWeight: FontWeight.w800)),
-                            subtitle: Text(
-                              deadline == null
-                                  ? cat
-                                  : '$cat • Due ${DateFormat('dd MMM, HH:mm').format(deadline)}',
-                            ),
-                            trailing: TextButton(
-                              onPressed: () async {
-                                nav.pop();
-                                await _toggleComplete(id, false);
-                              },
-                              child: const Text('Undo'),
-                            ),
+                        return PixelCard(
+                          backgroundColor: AppColors.background,
+                          child: InkWell(
                             onTap: () => _openTaskMenu(t),
+                            child: Row(
+                              children: [
+                                Icon(_catIcon(cat), color: color, size: 20),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(subject, style: AppTextStyles.pixelAction.copyWith(fontSize: 14, decoration: TextDecoration.lineThrough)), // pixelAction replacement
+                                      Text(
+                                        deadline == null ? cat : '$cat • Due ${DateFormat('dd MMM').format(deadline)}', 
+                                        style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle)
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.undo, size: 18),
+                                  onPressed: () async {
+                                    nav.pop();
+                                    await _toggleComplete(id, false);
+                                  }
+                                )
+                              ],
+                            ),
                           ),
                         );
                       },
@@ -325,75 +337,87 @@ class _FocusPageState extends State<FocusPage> {
     final doneTasks = tasks.where((t) => (t['is_completed'] as bool? ?? false) == true).toList();
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openActionMenu(doneTasks),
-        child: const Icon(Icons.edit_outlined),
+        backgroundColor: AppColors.secondary,
+        shape: BeveledRectangleBorder(
+              borderRadius: BorderRadius.zero,
+              side: BorderSide(color: AppColors.text, width: 2),
+        ),
+        child: const Icon(Icons.edit_outlined, color: AppColors.text),
       ),
       body: loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : RefreshIndicator(
               onRefresh: _load,
+              color: AppColors.primary,
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  Text('Quests', style: Theme.of(context).textTheme.headlineSmall),
+                  Text('Quests', style: AppTextStyles.pixelTitle),
                   const SizedBox(height: 8),
                   Text(
                     'Active: ${activeTasks.length} • Completed: ${doneTasks.length}',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: AppTextStyles.pixelBody.copyWith(fontSize: 12, color: AppColors.subtle),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
 
                   if (activeTasks.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Center(child: Text('No active quests. Tap + to add one.')),
+                     Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Center(child: Text('No active quests. Tap + to add one.', style: AppTextStyles.pixelBody)),
                     )
                   else
                     ...activeTasks.map((t) {
                       final id = t['id'] as int;
                       final subject = (t['subject_name'] ?? '-') as String;
-                      final desc = (t['task_desc'] ?? '').toString();
                       final isDifficult = (t['is_difficult'] as bool?) ?? false;
                       final deadline = DateTime.tryParse(t['deadline']?.toString() ?? '');
-                      final hasDesc = desc.trim().isNotEmpty;
 
                       final cat = _cat(t);
                       final color = _catColor(cat);
 
-                      return Card(
-                        shape: RoundedRectangleBorder(
-                          side: BorderSide(color: color.withValues(alpha: 0.35), width: 1.5),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: ListTile(
-                          leading: Icon(_catIcon(cat), color: color),
-                          title: Row(
-                            children: [
-                              Expanded(
-                                child: Text(subject, style: const TextStyle(fontWeight: FontWeight.w800)),
-                              ),
-                              if (isDifficult) const Text('🚩'),
-                              if (hasDesc)
-                                const Padding(
-                                  padding: EdgeInsets.only(left: 6),
-                                  child: Icon(Icons.sticky_note_2_outlined, size: 16),
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: PixelCard(
+                          backgroundColor: AppColors.surface,
+                          child: InkWell(
+                            onTap: () => _openTaskMenu(t),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 4, height: 40,
+                                  color: color,
                                 ),
-                            ],
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(child: Text(subject, style: AppTextStyles.pixelHeader.copyWith(fontSize: 16))),
+                                          if (isDifficult) const Text('🚩'),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(_deadlineLabel(cat, deadline), style: AppTextStyles.pixelBody.copyWith(fontSize: 12, color: AppColors.subtle)),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.check_circle_outline),
+                                  onPressed: () => _toggleComplete(id, true),
+                                ),
+                              ],
+                            ),
                           ),
-                          subtitle: Text(_deadlineLabel(cat, deadline)),
-                          trailing: IconButton(
-                            tooltip: 'Mark done',
-                            icon: const Icon(Icons.check_circle_outline),
-                            onPressed: () => _toggleComplete(id, true),
-                          ),
-                          onTap: () => _openTaskMenu(t),
                         ),
                       );
                     }),
 
                   const SizedBox(height: 60),
-                  const Text('Tip: Tap a quest to view details. Use + for actions (Add/History/Focus Mode).'),
                 ],
               ),
             ),
@@ -464,42 +488,43 @@ class _AddTaskPageState extends State<AddTaskPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Quest')),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: Text('Add Quest', style: AppTextStyles.pixelHeader), backgroundColor: AppColors.background,),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           DropdownButtonFormField<String>(
-            initialValue: category,
-            items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+            value: category,
+            items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c, style: AppTextStyles.pixelBody))).toList(),
             onChanged: (v) => setState(() => category = v ?? 'Study'),
-            decoration: const InputDecoration(labelText: 'Category'),
-          ),
-          const SizedBox(height: 12),
-
-          TextField(
-            controller: subjectCtrl,
-            decoration: const InputDecoration(labelText: 'Quest title (e.g., Finish Math Homework)'),
-          ),
-          const SizedBox(height: 12),
-
-          TextField(
-            controller: descCtrl,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Quest details (optional)',
-              alignLabelWithHint: true,
+            decoration: InputDecoration(
+              labelText: 'Category',
+              labelStyle: AppTextStyles.pixelBody,
+              border: OutlineInputBorder(borderSide: BorderSide(color: AppColors.text)),
+              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.text)),
             ),
           ),
           const SizedBox(height: 12),
 
-          Card(
+          PixelInput(
+            hintText: 'Quest title',
+            controller: subjectCtrl,
+          ),
+          const SizedBox(height: 12),
+
+          PixelInput(
+            hintText: 'Details (optional)',
+            controller: descCtrl,
+          ),
+          const SizedBox(height: 12),
+
+          PixelCard(
             child: ListTile(
-              title: const Text('Deadline'),
-              subtitle: Text(deadline == null ? 'No deadline set' : DateFormat('dd MMM, HH:mm').format(deadline!)),
+              title: Text('Deadline', style: AppTextStyles.pixelHeader.copyWith(fontSize: 14)),
+              subtitle: Text(deadline == null ? 'No deadline set' : DateFormat('dd MMM, HH:mm').format(deadline!), style: AppTextStyles.pixelBody),
               trailing: const Icon(Icons.calendar_month),
               onTap: () async {
                 final now = DateTime.now();
-
                 final d = await showDatePicker(
                   context: context,
                   firstDate: now,
@@ -507,13 +532,11 @@ class _AddTaskPageState extends State<AddTaskPage> {
                   initialDate: deadline ?? now,
                 );
                 if (d == null) return;
-
                 final t = await showTimePicker(
                   context: context,
                   initialTime: TimeOfDay.fromDateTime(deadline ?? now),
                 );
                 if (t == null) return;
-
                 setState(() {
                   deadline = DateTime(d.year, d.month, d.day, t.hour, t.minute);
                 });
@@ -524,13 +547,14 @@ class _AddTaskPageState extends State<AddTaskPage> {
           SwitchListTile(
             value: isDifficult,
             onChanged: (v) => setState(() => isDifficult = v),
-            title: const Text('Mark as Difficult (🚩 Red Flag)'),
+            title: Text('Mark as Difficult (🚩 Red Flag)', style: AppTextStyles.pixelBody),
           ),
 
           const SizedBox(height: 20),
-          FilledButton(
-            onPressed: loading ? null : _save,
-            child: Text(loading ? 'Saving...' : 'Save Quest'),
+          PixelButton(
+            text: loading ? 'SAVING...' : 'SAVE QUEST',
+            onPressed: loading ? () {} : _save,
+            color: AppColors.secondary,
           ),
         ],
       ),

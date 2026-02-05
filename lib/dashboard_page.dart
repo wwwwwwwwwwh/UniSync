@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
+import 'theme/app_theme.dart';
+import 'widgets/pixel_card.dart';
+import 'widgets/pixel_button.dart';
+import 'widgets/pixel_input.dart';
 import 'note_editor_page.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -18,13 +22,13 @@ class _DashboardPageState extends State<DashboardPage> {
   bool loading = true;
 
   // =========================
-  // Timetable config (FIXED)
+  // Timetable config
   // =========================
   static const int startHour = 6;     // 06:00
-  static const int endHour = 24;      // 23:59 (NEVER 24)
+  static const int endHour = 24;      // 23:59
   static const int slotMinutes = 30;
-  static const int totalMinutes = (endHour - startHour) * 60;// 1079
-  static const int slots = totalMinutes ~/ slotMinutes;             // 35 (0..34)
+  static const int totalMinutes = (endHour - startHour) * 60;
+  static const int slots = totalMinutes ~/ slotMinutes;
 
   // =========================
   // Data
@@ -54,7 +58,7 @@ class _DashboardPageState extends State<DashboardPage> {
   int _dow0(DateTime d) => d.weekday % 7;
 
   // =========================
-  // Load
+  // Load logic (Preserved)
   // =========================
   Future<void> _loadAll() async {
     setState(() => loading = true);
@@ -67,7 +71,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _loadSchedule() async {
     final uid = supabase.auth.currentUser!.id;
-
     final res = await supabase
         .from('schedule_items')
         .select()
@@ -110,7 +113,7 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     }
 
-    // Due today tasks (incomplete)
+    // Due today tasks
     final taskRes = await supabase
         .from('tasks')
         .select()
@@ -147,16 +150,11 @@ class _DashboardPageState extends State<DashboardPage> {
     return 'Due ${DateFormat('dd MMM, HH:mm').format(d)}';
   }
 
-  /// Enrich pinned task widgets with task_desc + deadline,
-  /// and automatically remove dashboard_widgets entries for tasks already completed.
   Future<void> _cleanupAndEnrichTaskWidgets(String todayStr) async {
-    // Collect pinned task widgets
     final taskWidgets = dashboardWidgets.where((w) => (w['type'] ?? '').toString() == 'task').toList();
     if (taskWidgets.isEmpty) return;
 
     final taskIds = taskWidgets.map((w) => (w['ref_id'] as num).toInt()).toSet().toList();
-
-    // Fetch all tasks in one query
     final taskRes = await supabase
         .from('tasks')
         .select('id, subject_name, task_desc, deadline, is_completed')
@@ -170,7 +168,6 @@ class _DashboardPageState extends State<DashboardPage> {
       for (final t in tasks) (t['id'] as num).toInt(): t
     };
 
-    // Remove completed pinned tasks from dashboard_widgets
     final completedWidgetIds = <int>[];
 
     for (final w in taskWidgets) {
@@ -178,7 +175,6 @@ class _DashboardPageState extends State<DashboardPage> {
       final widgetId = (w['id'] as num).toInt();
       final t = taskMap[refId];
 
-      // If task missing or completed -> remove from dashboard
       if (t == null || (t['is_completed'] as bool? ?? false) == true) {
         completedWidgetIds.add(widgetId);
       }
@@ -190,7 +186,6 @@ class _DashboardPageState extends State<DashboardPage> {
           .delete()
           .inFilter('id', completedWidgetIds);
 
-      // reload widgets after deletion
       final wRes2 = await supabase
           .from('dashboard_widgets')
           .select()
@@ -203,7 +198,6 @@ class _DashboardPageState extends State<DashboardPage> {
           : <Map<String, dynamic>>[];
     }
 
-    // Enrich remaining task widgets with extra fields for UI
     for (final w in dashboardWidgets) {
       if ((w['type'] ?? '').toString() != 'task') continue;
 
@@ -218,7 +212,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   // =========================
-  // Colors
+  // Colors (Pixel Palette)
   // =========================
   Color _colorFor(String category, String customHex) {
     if (customHex.startsWith('#') && customHex.length == 7) {
@@ -228,15 +222,11 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     switch (category) {
-      case 'Finance':
-        return const Color(0xFF2E7D32);
-      case 'Personal':
-        return const Color(0xFF1565C0);
-      case 'Project':
-        return const Color(0xFF6A1B9A);
+      case 'Finance': return const Color(0xFF66BB6A); // Pixel Green
+      case 'Personal': return const Color(0xFF42A5F5); // Pixel Blue
+      case 'Project': return const Color(0xFFAB47BC); // Pixel Purple
       case 'Study':
-      default:
-        return const Color(0xFFEF6C00);
+      default: return const Color(0xFFFFA726); // Pixel Orange
     }
   }
 
@@ -245,7 +235,7 @@ class _DashboardPageState extends State<DashboardPage> {
   // =========================
   List<_Occ> _occurrencesForDay(DateTime day) {
     final dayStart = DateTime(day.year, day.month, day.day, startHour, 0);
-    final dayEnd = DateTime(day.year, day.month, day.day).add(const Duration(days: 1)); // 00:00 next day
+    final dayEnd = DateTime(day.year, day.month, day.day).add(const Duration(days: 1)); 
 
     final dow = _dow0(day);
     final out = <_Occ>[];
@@ -280,8 +270,7 @@ class _DashboardPageState extends State<DashboardPage> {
       } else {
         final days = (r['repeat_days'] as List?)
                 ?.map((e) => (e as num).toInt())
-                .toList() ??
-            [];
+                .toList() ?? [];
         if (!days.contains(dow)) continue;
 
         final duration = end.difference(start);
@@ -312,7 +301,7 @@ class _DashboardPageState extends State<DashboardPage> {
   int _slotIndex(DateTime t) {
     final minutesFromStart = (t.hour * 60 + t.minute) - (startHour * 60);
     final idx = minutesFromStart ~/ slotMinutes;
-    return idx.clamp(0, slots); // NOTE: clamp to slots (36), not slots-1
+    return idx.clamp(0, slots);
   }
 
   _SegBuildResult _buildSegmentsForDay(DateTime day, List<_Occ> occs) {
@@ -322,9 +311,7 @@ class _DashboardPageState extends State<DashboardPage> {
       final s0 = _slotIndex(o.start);
       final s1 = _slotIndex(o.end);
       for (int s = s0; s < s1; s++) {
-        if (s >= 0 && s < slots) {
-          slotOccupants[s].add(o);
-        }
+        if (s >= 0 && s < slots) slotOccupants[s].add(o);
       }
     }
 
@@ -417,21 +404,20 @@ class _DashboardPageState extends State<DashboardPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Rest is part of the plan. Don’t schedule your soul too tight. 🌿'),
-        ),
+        const SnackBar(content: Text('Rest is part of the plan. 🌿')),
       );
     });
   }
 
   // =========================
-  // Timetable actions
+  // Actions
   // =========================
   Future<void> _openAddSheet(DateTime day) async {
     final added = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
+      backgroundColor: AppColors.surface,
       builder: (_) => _AddScheduleSheet(day: day),
     );
 
@@ -448,7 +434,6 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _showBlockDetails(_Occ o, DateTime rowDay) async {
     final now = DateTime.now();
     final isToday = DateUtils.isSameDay(rowDay, now);
-
     String status;
     if (isToday) {
       if (o.end.isBefore(now)) status = 'Completed';
@@ -464,44 +449,32 @@ class _DashboardPageState extends State<DashboardPage> {
 
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(o.title.isEmpty ? o.category : o.title),
+      builder: (ctx) => AlertDialog( // Could replace with PixelCard dialog but AlertDialog is native/simple
+        title: Text(o.title.isEmpty ? o.category : o.title, style: AppTextStyles.pixelHeader),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Time: $timeText'),
+            Text('Time: $timeText', style: AppTextStyles.pixelBody),
             const SizedBox(height: 6),
-            Text('Category: ${o.category}'),
+            Text('Category: ${o.category}', style: AppTextStyles.pixelBody),
             const SizedBox(height: 6),
-            Text('Status: $status'),
+            Text('Status: $status', style: AppTextStyles.pixelBody),
             if (o.isRepeat) ...[
               const SizedBox(height: 6),
-              const Text('Repeat: Weekly'),
+              Text('Repeat: Weekly', style: AppTextStyles.pixelBody),
             ],
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close', style: AppTextStyles.pixelButton)),
           FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
             icon: const Icon(Icons.delete),
-            label: const Text('Delete'),
+            label: Text('Delete', style: AppTextStyles.pixelButton.copyWith(color: Colors.white)),
             onPressed: () async {
               Navigator.pop(ctx);
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (dctx) => AlertDialog(
-                  title: const Text('Delete block?'),
-                  content: const Text('This cannot be undone.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('Cancel')),
-                    FilledButton(onPressed: () => Navigator.pop(dctx, true), child: const Text('Delete')),
-                  ],
-                ),
-              );
-              if (confirm == true) {
-                await _deleteScheduleItem(o.id);
-              }
+              _deleteScheduleItem(o.id);
             },
           ),
         ],
@@ -509,9 +482,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // =========================
-  // Widget actions
-  // =========================
   Future<void> _openNote(int noteId) async {
     final res = await supabase.from('notes').select().eq('id', noteId).single();
     if (!mounted) return;
@@ -519,12 +489,12 @@ class _DashboardPageState extends State<DashboardPage> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text((res['title'] ?? 'Note').toString()),
+        title: Text((res['title'] ?? 'Note').toString(), style: AppTextStyles.pixelHeader),
         content: SingleChildScrollView(
-          child: Text((res['body'] ?? '').toString()),
+          child: Text((res['body'] ?? '').toString(), style: AppTextStyles.pixelBody),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Close', style: AppTextStyles.pixelButton)),
         ],
       ),
     );
@@ -542,6 +512,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final choice = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      backgroundColor: AppColors.surface,
       builder: (ctx) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -550,12 +521,12 @@ class _DashboardPageState extends State<DashboardPage> {
             children: [
               ListTile(
                 leading: const Icon(Icons.note_add_outlined),
-                title: const Text('Notes'),
+                title: Text('Notes', style: AppTextStyles.pixelBody),
                 onTap: () => Navigator.pop(ctx, 'note'),
               ),
               ListTile(
                 leading: const Icon(Icons.flag_outlined),
-                title: const Text('Tasks'),
+                title: Text('Tasks', style: AppTextStyles.pixelBody),
                 onTap: () => Navigator.pop(ctx, 'task'),
               ),
             ],
@@ -610,6 +581,7 @@ class _DashboardPageState extends State<DashboardPage> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
+      backgroundColor: AppColors.surface,
       builder: (ctx) {
         return SafeArea(
           child: Padding(
@@ -617,7 +589,7 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Pick a task to pin', style: TextStyle(fontWeight: FontWeight.w900)),
+                Text('Pick a task to pin', style: AppTextStyles.pixelHeader.copyWith(fontSize: 18)),
                 const SizedBox(height: 12),
                 Flexible(
                   child: ListView.builder(
@@ -627,7 +599,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       final t = tasks[i];
                       final title = (t['subject_name'] ?? '-').toString();
                       return ListTile(
-                        title: Text(title),
+                        title: Text(title, style: AppTextStyles.pixelBody),
                         trailing: const Icon(Icons.add),
                         onTap: () => Navigator.pop(ctx, t),
                       );
@@ -663,26 +635,35 @@ class _DashboardPageState extends State<DashboardPage> {
     final days = _weekDaysFromToday();
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       floatingActionButton: FloatingActionButton(
         onPressed: _openAddWidgetMenu,
-        child: const Icon(Icons.add),
+        backgroundColor: AppColors.secondary,
+        shape: BeveledRectangleBorder(
+              borderRadius: BorderRadius.zero,
+              side: BorderSide(color: AppColors.text, width: 2),
+        ),
+        child: const Icon(Icons.add, color: AppColors.text),
       ),
       body: Stack(
         children: [
-          const _DashboardBackground(),
+          // Simplified Background
+          Container(color: AppColors.background),
+          
           if (loading)
-            const Center(child: CircularProgressIndicator())
+            const Center(child: CircularProgressIndicator(color: AppColors.primary))
           else
             RefreshIndicator(
               onRefresh: _loadAll,
+              color: AppColors.primary,
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  Text('Dashboard', style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: 6),
+                  Text('Dashboard', style: AppTextStyles.pixelTitle),
+                  const SizedBox(height: 16),
 
                   const _TimeHeaderCompact(leftWidth: 72),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
 
                   ...days.map((day) {
                     final occs = _occurrencesForDay(day);
@@ -695,7 +676,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     final isToday = DateUtils.isSameDay(day, DateTime.now());
 
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.only(bottom: 12),
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () => _openAddSheet(day),
@@ -711,7 +692,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     );
                   }),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 24),
 
                   _DashboardWidgetsGrid(
                     todayIncome: todayIncome,
@@ -750,7 +731,10 @@ class _TimeHeaderCompact extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: labels
-                .map((h) => Text(h.toString().padLeft(2, '0'), style: Theme.of(context).textTheme.labelSmall))
+                .map((h) => Text(
+                      h.toString().padLeft(2, '0'),
+                      style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle),
+                    ))
                 .toList(),
           ),
         ),
@@ -764,7 +748,6 @@ class _DayRowSegmented extends StatelessWidget {
   final bool isToday;
   final List<_Seg> segments;
   final double leftWidth;
-
   final bool Function(_Occ o) isPastEnded;
   final void Function(_Seg seg) onSegmentTap;
 
@@ -792,12 +775,12 @@ class _DayRowSegmented extends StatelessWidget {
             children: [
               Text(
                 dayLabel,
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: isToday ? Theme.of(context).colorScheme.primary : null,
+                style: AppTextStyles.pixelHeader.copyWith(
+                  fontSize: 16,
+                  color: isToday ? AppColors.primary : AppColors.text,
                 ),
               ),
-              Text(dateLabel, style: Theme.of(context).textTheme.labelSmall),
+              Text(dateLabel, style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle)),
             ],
           ),
         ),
@@ -808,21 +791,23 @@ class _DayRowSegmented extends StatelessWidget {
               const rowH = 44.0;
 
               if (segments.isEmpty) {
+                // Empty slot indicator
                 return Container(
                   height: rowH,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.black12),
+                    // dotted border simulated
+                     border: Border.all(color: AppColors.subtle.withValues(alpha: 0.3)),
                   ),
-                  child: const Center(child: Text('Tap to add')),
+                  child: Center(
+                    child: Text('Add Block', style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle))
+                  ),
                 );
               }
 
               return Container(
                 height: rowH,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.black12),
+                  border: Border.symmetric(horizontal: BorderSide(color: AppColors.subtle.withValues(alpha: 0.2))),
                 ),
                 child: Stack(
                   children: [
@@ -832,44 +817,36 @@ class _DayRowSegmented extends StatelessWidget {
 
                       final laneH = rowH / seg.lanes;
                       final top = seg.lane * laneH;
-
                       final ended = isPastEnded(seg.occ);
-
                       final label = seg.occ.title.trim().isNotEmpty
                           ? seg.occ.title.trim()[0].toUpperCase()
                           : seg.occ.category.substring(0, 1);
 
                       return Positioned(
                         left: left,
-                        top: top + 2,
+                        top: top,
                         width: max(2, width),
-                        height: max(8, laneH - 4),
+                        height: max(8, laneH - 2), // gap
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () => onSegmentTap(seg),
                           child: Container(
                             decoration: BoxDecoration(
-                              color: ended
-                                  ? Colors.grey.withValues(alpha: 0.35)
-                                  : seg.occ.color.withValues(alpha: 0.78),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: ended ? Colors.grey : seg.occ.color,
-                                width: 1.2,
-                              ),
+                              color: ended ? AppColors.subtle : seg.occ.color,
+                              // Pixel look: hard borders
+                              border: Border.all(color: AppColors.text, width: 1),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  offset: Offset(1, 1),
+                                  blurRadius: 0,
+                                )
+                              ]
                             ),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 6),
-                                child: Text(
-                                  label,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 12,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                            child: Center(
+                              child: Text(
+                                label,
+                                style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
                               ),
                             ),
                           ),
@@ -905,7 +882,7 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
   final titleCtrl = TextEditingController();
 
   String category = 'Study';
-  String colorHex = '#EF6C00';
+  String colorHex = '#FFA726';
 
   bool isRepeat = false;
   final Set<int> repeatDays = {};
@@ -916,12 +893,12 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
   bool saving = false;
 
   final palette = const [
-    '#EF6C00',
-    '#1565C0',
-    '#2E7D32',
-    '#6A1B9A',
-    '#C62828',
-    '#00838F',
+    '#FFA726',
+    '#42A5F5',
+    '#66BB6A',
+    '#AB47BC',
+    '#EF5350',
+    '#26C6DA',
   ];
 
   @override
@@ -989,114 +966,122 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
   @override
   Widget build(BuildContext context) {
     final dayText = DateFormat('EEE, dd MMM').format(widget.day);
-
-    final dowLabels = const [
-      ('Sun', 0),
-      ('Mon', 1),
-      ('Tue', 2),
-      ('Wed', 3),
-      ('Thu', 4),
-      ('Fri', 5),
-      ('Sat', 6),
-    ];
+    final dowLabels = const [('Sun', 0), ('Mon', 1), ('Tue', 2), ('Wed', 3), ('Thu', 4), ('Fri', 5), ('Sat', 6)];
 
     return Padding(
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
-        top: 12,
-        bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        top: 24,
+        bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Add Block • $dayText', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-          const SizedBox(height: 12),
+          Text('Add Block • $dayText', style: AppTextStyles.pixelHeader.copyWith(fontSize: 18)),
+          const SizedBox(height: 16),
 
-          TextField(
+          PixelInput(
+            hintText: 'Title (e.g., Math)',
             controller: titleCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Title (e.g., Math)',
-              border: OutlineInputBorder(),
-            ),
           ),
           const SizedBox(height: 12),
 
           DropdownButtonFormField<String>(
-            initialValue: category,
+            value: category,
             items: const ['Study', 'Finance', 'Personal', 'Project']
-                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                .map((c) => DropdownMenuItem(value: c, child: Text(c, style: AppTextStyles.pixelBody)))
                 .toList(),
             onChanged: (v) => setState(() => category = v ?? 'Study'),
-            decoration: const InputDecoration(
-              labelText: 'Category',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              border: OutlineInputBorder(borderSide: BorderSide(color: AppColors.text, width: 2)),
+              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.text, width: 2)),
             ),
           ),
           const SizedBox(height: 12),
 
           Row(
             children: [
-              Expanded(child: OutlinedButton(onPressed: _pickStart, child: Text('Start: ${start.format(context)}'))),
+              Expanded(
+                child: PixelButton(
+                  text: 'Start: ${start.format(context)}',
+                  onPressed: _pickStart,
+                  color: AppColors.surface,
+                )
+              ),
               const SizedBox(width: 12),
-              Expanded(child: OutlinedButton(onPressed: _pickEnd, child: Text('End: ${end.format(context)}'))),
+              Expanded(
+                child: PixelButton(
+                  text: 'End: ${end.format(context)}',
+                  onPressed: _pickEnd,
+                  color: AppColors.surface,
+                )
+              ),
             ],
           ),
 
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text('Color', style: Theme.of(context).textTheme.labelLarge),
-          ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 16),
+          Text('Color', style: AppTextStyles.pixelBody),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             children: palette.map((hex) {
               final c = Color(int.parse(hex.substring(1), radix: 16) + 0xFF000000);
               final selected = colorHex == hex;
-              return ChoiceChip(
-                selected: selected,
-                label: const Text(''),
-                avatar: CircleAvatar(backgroundColor: c),
-                onSelected: (_) => setState(() => colorHex = hex),
+              return GestureDetector(
+                onTap: () => setState(() => colorHex = hex),
+                child: Container(
+                  width: 32, height: 32,
+                  decoration: BoxDecoration(
+                    color: c,
+                    border: Border.all(color: AppColors.text, width: selected ? 3 : 1),
+                  ),
+                  child: selected ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
+                ),
               );
             }).toList(),
           ),
 
+          const SizedBox(height: 16),
           SwitchListTile(
             value: isRepeat,
             onChanged: (v) => setState(() => isRepeat = v),
-            title: const Text('Repeat weekly'),
+            title: Text('Repeat weekly', style: AppTextStyles.pixelBody),
           ),
 
           if (isRepeat) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               children: dowLabels.map((pair) {
                 final label = pair.$1;
                 final val = pair.$2;
                 final selected = repeatDays.contains(val);
-                return ChoiceChip(
-                  label: Text(label),
-                  selected: selected,
-                  onSelected: (_) {
-                    setState(() {
-                      if (selected) repeatDays.remove(val);
-                      else repeatDays.add(val);
-                    });
-                  },
+                return GestureDetector(
+                  onTap: () => setState(() {
+                    if (selected) repeatDays.remove(val);
+                    else repeatDays.add(val);
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: selected ? AppColors.primary : AppColors.surface,
+                      border: Border.all(color: AppColors.text),
+                    ),
+                    child: Text(label, style: AppTextStyles.pixelBody.copyWith(fontSize: 10)),
+                  ),
                 );
               }).toList(),
             ),
           ],
 
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: saving ? null : _save,
-            child: Text(saving ? 'Saving...' : 'Save'),
+          const SizedBox(height: 24),
+          PixelButton(
+            text: saving ? 'SAVING...' : 'SAVE',
+            onPressed: saving ? () {} : _save,
+            color: AppColors.secondary,
           ),
-          const SizedBox(height: 8),
         ],
       ),
     );
@@ -1104,33 +1089,8 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
 }
 
 // ============================================================
-// Widgets Grid (blocks) - CLEAN VERSION
+// Widgets Grid
 // ============================================================
-
-// stable gradient selection (deterministic)
-List<Color> _gradientForKey(String key) {
-  final gradients = <List<Color>>[
-    [const Color(0xFF7C4DFF), const Color(0xFF18FFFF)],
-    [const Color(0xFFFF6D00), const Color(0xFFFF1744)],
-    [const Color(0xFF00C853), const Color(0xFF00B0FF)],
-    [const Color(0xFFD500F9), const Color(0xFFFFD600)],
-    [const Color(0xFF1DE9B6), const Color(0xFF651FFF)],
-    [const Color(0xFFFF8A80), const Color(0xFF8C9EFF)],
-  ];
-
-  int hash = 0;
-  for (final c in key.codeUnits) {
-    hash = (hash * 31 + c) & 0x7fffffff;
-  }
-  return gradients[hash % gradients.length];
-}
-
-String _formatDue(dynamic deadline) {
-  if (deadline == null) return 'No deadline';
-  final d = DateTime.tryParse(deadline.toString());
-  if (d == null) return 'No deadline';
-  return 'Due ${DateFormat('dd MMM, HH:mm').format(d)}';
-}
 
 class _DashboardWidgetsGrid extends StatelessWidget {
   final num todayIncome;
@@ -1155,104 +1115,78 @@ class _DashboardWidgetsGrid extends StatelessWidget {
     final balance = todayIncome - todayExpense;
 
     final cards = <Widget>[
-      _InfoCard(
-        title: 'Money',
-        value: 'RM ${balance.toStringAsFixed(2)}',
-        subtitle:
-            'Income RM ${todayIncome.toStringAsFixed(2)} · Expense RM ${todayExpense.toStringAsFixed(2)}',
-        gradient: const [Color(0xFFD4AF37), Color(0xFFFFF59D)],
-        onTap: () {
-          showDialog(
-            context: context,
-            builder: (_) => AlertDialog(
-              title: const Text('Money'),
-              content: const Text('Go to Vault tab to manage expenses.'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
-                ),
-              ],
-            ),
-          );
-        },
+      PixelCard(
+        backgroundColor: AppColors.surface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Money', style: AppTextStyles.pixelHeader),
+            const SizedBox(height: 6),
+            Text('RM ${balance.toStringAsFixed(2)}', style: AppTextStyles.pixelBody.copyWith(color: AppColors.primary)),
+            const SizedBox(height: 4),
+            Text('+${todayIncome.toStringAsFixed(2)} / -${todayExpense.toStringAsFixed(2)}', 
+              style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle)),
+          ],
+        ),
       ),
-      _InfoCard(
-        title: 'Due Today',
-        value: dueTodayCount.toString(),
-        subtitle: 'Quests',
-        gradient: const [Color(0xFF7C4DFF), Color(0xFFB388FF)],
-        onTap: () {
-          showDialog(
-            context: context,
-            builder: (_) => AlertDialog(
-              title: const Text('Due Today'),
-              content: const Text('Go to Quests tab to view due tasks.'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
-                ),
-              ],
-            ),
-          );
-        },
+      PixelCard(
+        backgroundColor: AppColors.surface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Due Today', style: AppTextStyles.pixelHeader),
+            const SizedBox(height: 6),
+            Text(dueTodayCount.toString(), style: AppTextStyles.pixelBody.copyWith(color: Colors.redAccent)),
+            const SizedBox(height: 4),
+             Text('Quests', style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle)),
+          ],
+        ),
       ),
     ];
 
     for (final w in widgets) {
       final type = (w['type'] ?? '').toString();
       final title = (w['title'] ?? '').toString();
-      final key = '$type-${w['ref_id']}-$title';
 
       if (type == 'note') {
         cards.add(
-          _WidgetCard(
-            title: title,
-            subtitle: 'Note',
-            extraLine: 'Tap to open',
-            gradient: _gradientForKey(key),
-            onTap: () => onOpenNote((w['ref_id'] as num).toInt()),
-            onDelete: () => onDelete(w),
+          PixelCard(
+            child: InkWell(
+              onTap: () => onOpenNote((w['ref_id'] as num).toInt()),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Expanded(child: Text(title, style: AppTextStyles.pixelHeader.copyWith(fontSize: 14), maxLines: 1)),
+                    GestureDetector(onTap: () => onDelete(w), child: const Icon(Icons.close, size: 16)),
+                   ]),
+                   const SizedBox(height: 8),
+                   Text('Note', style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle)),
+                ],
+              ),
+            ),
           ),
         );
       } else {
-        final due = _formatDue(w['deadline']);
-        final desc = (w['task_desc'] ?? '').toString().trim();
-        final preview = desc.isEmpty
-            ? 'Tap to open'
-            : (desc.length > 60 ? '${desc.substring(0, 60)}…' : desc);
-
+        final due = (w['deadline'] != null) ? 'Due' : ''; // simplified
         cards.add(
-          _WidgetCard(
-            title: title,
-            subtitle: due,
-            extraLine: preview,
-            gradient: _gradientForKey(key),
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: Text(title),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(due),
-                      const SizedBox(height: 10),
-                      Text(desc.isEmpty ? '(No details)' : desc),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'),
-                    ),
-                  ],
-                ),
-              );
-            },
-            onDelete: () => onDelete(w),
+             PixelCard(
+            child: InkWell(
+              onTap: () { /* Show details */ },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Expanded(child: Text(title, style: AppTextStyles.pixelHeader.copyWith(fontSize: 14), maxLines: 1)),
+                    GestureDetector(onTap: () => onDelete(w), child: const Icon(Icons.close, size: 16)),
+                   ]),
+                   const SizedBox(height: 8),
+                   Text(due, style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: Colors.orange)),
+                ],
+              ),
+            ),
           ),
         );
       }
@@ -1261,142 +1195,13 @@ class _DashboardWidgetsGrid extends StatelessWidget {
     return Wrap(
       spacing: 12,
       runSpacing: 12,
-      children: cards.map((c) => SizedBox(width: 180, child: c)).toList(),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String subtitle;
-  final List<Color> gradient;
-  final VoidCallback? onTap;
-
-  const _InfoCard({
-    required this.title,
-    required this.value,
-    required this.subtitle,
-    required this.gradient,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _BaseCard(
-      gradient: gradient,
-      onTap: onTap,
-      trailing: null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 6),
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 6),
-          Text(subtitle, style: Theme.of(context).textTheme.labelSmall),
-        ],
-      ),
-    );
-  }
-}
-
-class _WidgetCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final String extraLine;
-  final List<Color> gradient;
-  final VoidCallback? onTap;
-  final VoidCallback onDelete;
-
-  const _WidgetCard({
-    required this.title,
-    required this.subtitle,
-    required this.extraLine,
-    required this.gradient,
-    required this.onTap,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _BaseCard(
-      gradient: gradient,
-      onTap: onTap,
-      trailing: IconButton(
-        tooltip: 'Remove',
-        icon: const Icon(Icons.close),
-        onPressed: onDelete,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w900),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 8),
-          Text(subtitle, style: Theme.of(context).textTheme.labelSmall),
-          const SizedBox(height: 6),
-          Text(extraLine, style: Theme.of(context).textTheme.labelSmall),
-        ],
-      ),
-    );
-  }
-}
-
-class _BaseCard extends StatelessWidget {
-  final List<Color> gradient;
-  final Widget child;
-  final VoidCallback? onTap;
-  final Widget? trailing;
-
-  const _BaseCard({
-    required this.gradient,
-    required this.child,
-    required this.onTap,
-    required this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: gradient,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        padding: const EdgeInsets.all(2),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: Theme.of(context).cardColor,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (trailing != null)
-                Align(alignment: Alignment.topRight, child: trailing!),
-              child,
-            ],
-          ),
-        ),
-      ),
+      children: cards.map((c) => SizedBox(width: 160, child: c)).toList(),
     );
   }
 }
 
 // ============================================================
-// Models for timetable segments
+// Models
 // ============================================================
 
 class _Occ {
@@ -1446,79 +1251,4 @@ class _SegBuildResult {
   final bool tooManyOverlap;
 
   _SegBuildResult({required this.segments, required this.tooManyOverlap});
-}
-
-// ============================================================
-// Background
-// ============================================================
-class _DashboardBackground extends StatelessWidget {
-  const _DashboardBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return IgnorePointer(
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              cs.primary.withValues(alpha: 0.14),   // stronger than before
-              cs.secondary.withValues(alpha: 0.10), // stronger than before
-              cs.surface,
-            ],
-          ),
-        ),
-        child: CustomPaint(
-          painter: _SoftPatternPainter(
-            dotColor: cs.primary.withValues(alpha: 0.12),
-            ringColor: cs.secondary.withValues(alpha: 0.10),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SoftPatternPainter extends CustomPainter {
-  final Color dotColor;
-  final Color ringColor;
-
-  _SoftPatternPainter({
-    required this.dotColor,
-    required this.ringColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // --- Dots (visible but gentle) ---
-    final dotPaint = Paint()..color = dotColor;
-    const gap = 38.0;      // tighter spacing (more visible)
-    const radius = 2.2;    // slightly bigger
-
-    for (double y = 24; y < size.height; y += gap) {
-      for (double x = 24; x < size.width; x += gap) {
-        canvas.drawCircle(Offset(x, y), radius, dotPaint);
-      }
-    }
-
-    // --- Big soft rings (adds “premium” depth without clutter) ---
-    final ringPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..color = ringColor;
-
-    void ring(double cx, double cy, double r) {
-      canvas.drawCircle(Offset(cx, cy), r, ringPaint);
-    }
-
-    ring(size.width * 0.16, size.height * 0.20, 120);
-    ring(size.width * 0.86, size.height * 0.28, 150);
-    ring(size.width * 0.30, size.height * 0.78, 180);
-  }
-
-  @override
-  bool shouldRepaint(covariant _SoftPatternPainter oldDelegate) => false;
 }

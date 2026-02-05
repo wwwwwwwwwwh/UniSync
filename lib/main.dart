@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'theme/app_theme.dart';
+
 import 'secrets.dart';
 import 'sign_in_page.dart';
 import 'home_shell.dart';
@@ -26,10 +28,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'UniSync',
-      theme: ThemeData(
-        useMaterial3: true,
-        textTheme: GoogleFonts.interTextTheme(),
-      ),
+      theme: AppTheme.lightTheme,
       home: const AuthGate(),
     );
   }
