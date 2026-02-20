@@ -10,7 +10,8 @@ import 'widgets/pixel_input.dart';
 import 'note_editor_page.dart';
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  final ValueChanged<int>? onNavigate;
+  const DashboardPage({super.key, this.onNavigate});
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -132,15 +133,17 @@ class _DashboardPageState extends State<DashboardPage> {
         .from('dashboard_widgets')
         .select()
         .eq('user_id', uid)
-        .eq('widget_date', todayStr)
+
+        // .eq('widget_date', todayStr) // User wants notes to stay forever
         .order('created_at', ascending: false);
 
     dashboardWidgets = (wRes is List)
         ? wRes.map((e) => Map<String, dynamic>.from(e as Map)).toList()
         : [];
 
-    if (mounted) setState(() {});
     await _cleanupAndEnrichTaskWidgets(todayStr);
+    await _cleanupAndEnrichNoteWidgets();
+    if (mounted) setState(() {});
   }
 
   String _formatDue(dynamic deadline) {
@@ -211,6 +214,36 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  Future<void> _cleanupAndEnrichNoteWidgets() async {
+    final noteWidgets = dashboardWidgets.where((w) => (w['type'] ?? '').toString() == 'note').toList();
+    if (noteWidgets.isEmpty) return;
+
+    final noteIds = noteWidgets.map((w) => (w['ref_id'] as num).toInt()).toSet().toList();
+    if (noteIds.isEmpty) return;
+
+    final res = await supabase.from('notes').select().inFilter('id', noteIds);
+    final notes = (res as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    
+    final noteMap = {for (var n in notes) n['id']: n};
+    final deadIds = <int>[];
+
+    for (var w in noteWidgets) {
+        final refId = (w['ref_id'] as num).toInt();
+        if (!noteMap.containsKey(refId)) {
+            deadIds.add(w['id']);
+        } else {
+            // Enrich title & body
+            w['title'] = noteMap[refId]!['title'];
+            w['body'] = noteMap[refId]!['body']; 
+        }
+    }
+
+    if (deadIds.isNotEmpty) {
+        await supabase.from('dashboard_widgets').delete().inFilter('id', deadIds);
+        dashboardWidgets.removeWhere((w) => deadIds.contains(w['id']));
+    }
+  }
+
   // =========================
   // Colors (Pixel Palette)
   // =========================
@@ -247,8 +280,8 @@ class _DashboardPageState extends State<DashboardPage> {
       final hex = (r['color'] ?? '').toString();
       final isRepeat = (r['is_repeat'] as bool?) ?? false;
 
-      final start = DateTime.tryParse(r['start_time']?.toString() ?? '');
-      final end = DateTime.tryParse(r['end_time']?.toString() ?? '');
+      final start = DateTime.tryParse(r['start_time']?.toString() ?? '')?.toLocal();
+      final end = DateTime.tryParse(r['end_time']?.toString() ?? '')?.toLocal();
       if (start == null || end == null) continue;
 
       if (!isRepeat) {
@@ -483,21 +516,25 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _openNote(int noteId) async {
-    final res = await supabase.from('notes').select().eq('id', noteId).single();
+    // Fetch full note first (handled by passing ID to enricher usually, but here we act on tap)
+    // Actually we can pass the enriched widget data if we have it, but safest to fetch fresh.
+    final res = await supabase.from('notes').select().eq('id', noteId).maybeSingle();
+    
+    if (res == null) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Note not found')));
+      return;
+    }
+
     if (!mounted) return;
 
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text((res['title'] ?? 'Note').toString(), style: AppTextStyles.pixelHeader),
-        content: SingleChildScrollView(
-          child: Text((res['body'] ?? '').toString(), style: AppTextStyles.pixelBody),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Close', style: AppTextStyles.pixelButton)),
-        ],
-      ),
+    final updated = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(builder: (_) => NoteEditorPage(existingNote: Map<String, dynamic>.from(res))),
     );
+
+    if (updated != null) {
+      _loadAll(); // Reload to reflect changes
+    }
   }
 
   Future<void> _deleteWidget(Map<String, dynamic> w) async {
@@ -659,7 +696,7 @@ class _DashboardPageState extends State<DashboardPage> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  Text('Dashboard', style: AppTextStyles.pixelTitle),
+                  Text('Dashboard', style: AppTextStyles.pixelTitle.copyWith(fontSize: 32)),
                   const SizedBox(height: 16),
 
                   const _TimeHeaderCompact(leftWidth: 72),
@@ -701,6 +738,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     widgets: dashboardWidgets,
                     onDelete: _deleteWidget,
                     onOpenNote: _openNote,
+                    onNavigate: widget.onNavigate,
                   ),
 
                   const SizedBox(height: 80),
@@ -947,8 +985,8 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
         'title': title.isEmpty ? category : title,
         'category': category,
         'color': colorHex,
-        'start_time': s.toIso8601String(),
-        'end_time': e.toIso8601String(),
+        'start_time': s.toUtc().toIso8601String(),
+        'end_time': e.toUtc().toIso8601String(),
         'is_repeat': isRepeat,
         'repeat_days': isRepeat ? repeatDays.toList() : null,
       });
@@ -1008,6 +1046,7 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
                   text: 'Start: ${start.format(context)}',
                   onPressed: _pickStart,
                   color: AppColors.surface,
+                  textColor: AppColors.text, // Fix: Dark text on white button
                 )
               ),
               const SizedBox(width: 12),
@@ -1016,6 +1055,7 @@ class _AddScheduleSheetState extends State<_AddScheduleSheet> {
                   text: 'End: ${end.format(context)}',
                   onPressed: _pickEnd,
                   color: AppColors.surface,
+                  textColor: AppColors.text, // Fix: Dark text on white button
                 )
               ),
             ],
@@ -1100,6 +1140,7 @@ class _DashboardWidgetsGrid extends StatelessWidget {
   final List<Map<String, dynamic>> widgets;
   final void Function(Map<String, dynamic>) onDelete;
   final void Function(int noteId) onOpenNote;
+  final ValueChanged<int>? onNavigate;
 
   const _DashboardWidgetsGrid({
     required this.todayIncome,
@@ -1108,6 +1149,7 @@ class _DashboardWidgetsGrid extends StatelessWidget {
     required this.widgets,
     required this.onDelete,
     required this.onOpenNote,
+    this.onNavigate,
   });
 
   @override
@@ -1117,31 +1159,37 @@ class _DashboardWidgetsGrid extends StatelessWidget {
     final cards = <Widget>[
       PixelCard(
         backgroundColor: AppColors.surface,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Money', style: AppTextStyles.pixelHeader),
-            const SizedBox(height: 6),
-            Text('RM ${balance.toStringAsFixed(2)}', style: AppTextStyles.pixelBody.copyWith(color: AppColors.primary)),
-            const SizedBox(height: 4),
-            Text('+${todayIncome.toStringAsFixed(2)} / -${todayExpense.toStringAsFixed(2)}', 
-              style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle)),
-          ],
+        child: InkWell(
+          onTap: () => onNavigate?.call(1), // Go to Vault
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Money', style: AppTextStyles.pixelHeader),
+              const SizedBox(height: 6),
+              Text('RM ${balance.toStringAsFixed(2)}', style: AppTextStyles.pixelBody.copyWith(color: AppColors.primary)),
+              const SizedBox(height: 4),
+              Text('+${todayIncome.toStringAsFixed(2)} / -${todayExpense.toStringAsFixed(2)}', 
+                style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle)),
+            ],
+          ),
         ),
       ),
       PixelCard(
         backgroundColor: AppColors.surface,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Due Today', style: AppTextStyles.pixelHeader),
-            const SizedBox(height: 6),
-            Text(dueTodayCount.toString(), style: AppTextStyles.pixelBody.copyWith(color: Colors.redAccent)),
-            const SizedBox(height: 4),
-             Text('Quests', style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle)),
-          ],
+        child: InkWell(
+          onTap: () => onNavigate?.call(2), // Go to Focus
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Due Today', style: AppTextStyles.pixelHeader),
+              const SizedBox(height: 6),
+              Text(dueTodayCount.toString(), style: AppTextStyles.pixelBody.copyWith(color: Colors.redAccent)),
+              const SizedBox(height: 4),
+               Text('Quests', style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle)),
+            ],
+          ),
         ),
       ),
     ];
@@ -1192,10 +1240,17 @@ class _DashboardWidgetsGrid extends StatelessWidget {
       }
     }
 
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: cards.map((c) => SizedBox(width: 160, child: c)).toList(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = 12.0;
+        final itemWidth = (constraints.maxWidth - spacing) / 2;
+        
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: cards.map((c) => SizedBox(width: itemWidth, child: c)).toList(),
+        );
+      },
     );
   }
 }

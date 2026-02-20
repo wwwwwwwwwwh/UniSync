@@ -150,6 +150,7 @@ class _MindPageState extends State<MindPage> {
               onPressed: () => nav.pop(),
               width: 80,
               color: AppColors.background,
+              textColor: AppColors.text, // Fix: Dark text on light button
             ),
              if (today) ...[
                const SizedBox(width: 8),
@@ -422,13 +423,7 @@ class _JournalEditorPageState extends State<JournalEditorPage> {
 
           const SizedBox(height: 16),
 
-          PixelInput(
-            hintText: 'Write freely. No pressure.',
-            controller: textCtrl,
-            // maxLines: 10, // PixelInput needs to support maxLines or I use TextField directly. 
-            // Checking PixelInput implementation... it wraps TextField but doesn't expose maxLines.
-            // I should update PixelInput or just use Container + TextField here for multiline.
-          ),
+
           // Let's use a custom Container for multiline editor to ensure style.
           Container(
              margin: const EdgeInsets.only(top: 12),
@@ -464,6 +459,7 @@ class _JournalEditorPageState extends State<JournalEditorPage> {
               text: 'CLOSE',
               onPressed: () => Navigator.pop(context),
               color: AppColors.surface,
+              textColor: AppColors.text, // Fix: Dark text
             ),
         ],
       ),

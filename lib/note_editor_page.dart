@@ -6,7 +6,8 @@ import 'widgets/pixel_input.dart';
 import 'widgets/pixel_card.dart';
 
 class NoteEditorPage extends StatefulWidget {
-  const NoteEditorPage({super.key});
+  final Map<String, dynamic>? existingNote;
+  const NoteEditorPage({super.key, this.existingNote});
 
   @override
   State<NoteEditorPage> createState() => _NoteEditorPageState();
@@ -15,9 +16,16 @@ class NoteEditorPage extends StatefulWidget {
 class _NoteEditorPageState extends State<NoteEditorPage> {
   final supabase = Supabase.instance.client;
 
-  final titleCtrl = TextEditingController();
-  final bodyCtrl = TextEditingController();
+  late final TextEditingController titleCtrl;
+  late final TextEditingController bodyCtrl;
   bool saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    titleCtrl = TextEditingController(text: widget.existingNote?['title']?.toString() ?? '');
+    bodyCtrl = TextEditingController(text: widget.existingNote?['body']?.toString() ?? '');
+  }
 
   @override
   void dispose() {
@@ -39,13 +47,22 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
     setState(() => saving = true);
     try {
-      final res = await supabase.from('notes').insert({
-        'user_id': supabase.auth.currentUser!.id,
-        'title': title,
-        'body': body.isEmpty ? null : body,
-      }).select().single();
-
-      return Map<String, dynamic>.from(res);
+      if (widget.existingNote != null) {
+        // Update
+        final res = await supabase.from('notes').update({
+          'title': title,
+          'body': body.isEmpty ? null : body,
+        }).eq('id', widget.existingNote!['id']).select().single();
+        return Map<String, dynamic>.from(res);
+      } else {
+        // Create
+        final res = await supabase.from('notes').insert({
+          'user_id': supabase.auth.currentUser!.id,
+          'title': title,
+          'body': body.isEmpty ? null : body,
+        }).select().single();
+         return Map<String, dynamic>.from(res);
+      }
     } on PostgrestException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
       return null;
@@ -59,7 +76,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('New Note', style: AppTextStyles.pixelHeader),
+        title: Text(widget.existingNote != null ? 'Edit Note' : 'New Note', style: AppTextStyles.pixelHeader),
         backgroundColor: AppColors.background,
         elevation: 0,
         iconTheme: const IconThemeData(color: AppColors.text),
@@ -98,9 +115,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             onPressed: saving
                 ? () {}
                 : () async {
-                    final created = await _save();
+                    final result = await _save();
                     if (!mounted) return;
-                    if (created != null) Navigator.pop(context, created);
+                    if (result != null) Navigator.pop(context, result);
                   },
             color: AppColors.secondary,
           ),

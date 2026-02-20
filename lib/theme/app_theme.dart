@@ -62,9 +62,9 @@ class AppTheme {
       colorScheme: ColorScheme(
         brightness: Brightness.light,
         primary: AppColors.primary,
-        onPrimary: AppColors.text,
+        onPrimary: AppColors.surface, // Fix: White text on Dark Wood (e.g., TimePicker selected)
         secondary: AppColors.secondary,
-        onSecondary: AppColors.text,
+        onSecondary: AppColors.text, // Dark text on Green Chalkboard
         error: Colors.redAccent,
         onError: Colors.white,
         surface: AppColors.background,

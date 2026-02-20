@@ -1,0 +1,36 @@
+UniSync/
+├── backend/ (Supabase Cloud)
+│   ├── Authentication/
+│   │   └── Auth.Users           # User Management & Session Handling
+│   ├── Database/ (PostgreSQL)
+│   │   ├── public.schedule_items# Stores timetable blocks (start/end/repeat)
+│   │   ├── public.tasks         # Stores quests, XP rewards, and deadlines
+│   │   ├── public.expenses      # Stores financial income/expense records
+│   │   ├── public.notes         # Stores journal entries and mind notes
+│   │   └── public.dashboard_widgets # Stores pinned notes/tasks layout
+│   └── API/ (Auto-generated)
+│       └── REST/Realtime        # Interface used by Flutter app
+│
+├── frontend/ (Flutter Application)
+│   ├── android/                 # Native Android configuration
+│   │   └── app/src/main/AndroidManifest.xml # Permissions (Internet)
+│   ├── assets/
+│   │   ├── fonts/               # Typography (Alagard.ttf, Titles.ttf)
+│   │   └── images/              # Assets (school_library_bg.png, horizontal_bg.png)
+│   ├── lib/
+│   │   ├── theme/
+│   │   │   └── app_theme.dart   # Design System (Colors, TextStyles)
+│   │   ├── widgets/
+│   │   │   ├── pixel_button.dart # Custom Retro Button
+│   │   │   ├── pixel_card.dart   # Custom Bordered Container
+│   │   │   └── pixel_input.dart  # Custom Text Field
+│   │   ├── dashboard_page.dart   # Feature: Timetable & Widget Grid
+│   │   ├── focus_page.dart       # Feature: Gamified Task List (Quests)
+│   │   ├── home_shell.dart       # Main Navigation Controller
+│   │   ├── main.dart             # App Entry Point & Auth Listener
+│   │   ├── mind_page.dart        # Feature: Journal & Calendar
+│   │   ├── note_editor_page.dart # Feature: Text Editor
+│   │   ├── secrets.dart          # Configuration: API Keys
+│   │   ├── sign_in_page.dart     # Feature: Auth UI & Background Logic
+│   │   └── vault_page.dart       # Feature: Finance Tracker
+│   └── pubspec.yaml              # Project Dependencies (Supabase, Intl, etc.)

@@ -5,6 +5,7 @@ import 'theme/app_theme.dart';
 import 'widgets/pixel_card.dart';
 import 'widgets/pixel_button.dart';
 import 'widgets/pixel_input.dart';
+import 'widgets/currency_input.dart';
 
 class VaultPage extends StatefulWidget {
   const VaultPage({super.key});
@@ -18,6 +19,7 @@ class _VaultPageState extends State<VaultPage> {
 
   bool loading = true;
   List<Map<String, dynamic>> items = [];
+  String _sortMode = 'Day'; // Day, Week, Month
 
   @override
   void initState() {
@@ -102,6 +104,7 @@ class _VaultPageState extends State<VaultPage> {
                       text: 'Close',
                       onPressed: () => nav.pop(),
                       color: AppColors.surface,
+                      textColor: AppColors.text, // Fix: Dark text
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -117,7 +120,13 @@ class _VaultPageState extends State<VaultPage> {
                             title: const Text('Delete record?', style: TextStyle(fontWeight: FontWeight.bold)),
                             content: const Text('This action cannot be undone.'),
                             actions: [
-                              PixelButton(onPressed: () => Navigator.pop(dctx, false), text: 'Cancel', width: 80, color: AppColors.background),
+                              PixelButton(
+                                onPressed: () => Navigator.pop(dctx, false),
+                                text: 'Cancel',
+                                width: 80,
+                                color: AppColors.background,
+                                textColor: AppColors.text, // Fix: Dark text
+                              ),
                               const SizedBox(width: 8),
                               PixelButton(onPressed: () => Navigator.pop(dctx, true), text: 'Delete', width: 80, color: Colors.redAccent, textColor: Colors.white),
                             ],
@@ -140,6 +149,114 @@ class _VaultPageState extends State<VaultPage> {
         );
       },
     );
+  }
+
+
+
+  List<Widget> _buildGroupedList(NumberFormat currency) {
+    // 1. Group items
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (var e in items) {
+      final date = DateTime.tryParse(e['created_at'].toString()) ?? DateTime.now();
+      String key;
+      
+      if (_sortMode == 'Day') {
+        key = DateFormat('EEE, dd MMM yyyy').format(date);
+      } else if (_sortMode == 'Week') {
+        // Calculate Week Start (Monday)
+        final weekStart = date.subtract(Duration(days: date.weekday - 1));
+        final weekEnd = weekStart.add(const Duration(days: 6));
+        key = '${DateFormat('dd MMM').format(weekStart)} - ${DateFormat('dd MMM').format(weekEnd)}';
+      } else { // Month
+        key = DateFormat('MMMM yyyy').format(date);
+      }
+      
+      groups.putIfAbsent(key, () => []).add(e);
+    }
+
+    final widgets = <Widget>[];
+    
+    // 2. Build Widgets
+    groups.forEach((header, records) {
+      // Header Line
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              Text(header, style: AppTextStyles.pixelBody.copyWith(fontWeight: FontWeight.bold, color: AppColors.subtle)),
+              const SizedBox(width: 8),
+              Expanded(child: Container(height: 2, color: AppColors.subtle.withValues(alpha: 0.3))),
+            ],
+          ),
+        ),
+      );
+
+      // Record Items
+      for (var e in records) {
+        final title = (e['title'] ?? '-') as String;
+        final isIncome = (e['is_income'] as bool?) ?? false;
+        final categoryRaw = e['category'];
+        final category = (categoryRaw ?? (isIncome ? 'Income' : 'Uncategorized')).toString();
+        final amount = (e['amount'] as num?) ?? 0;
+        final hasDesc = (e['description'] ?? '').toString().trim().isNotEmpty;
+        // final createdAt = DateTime.tryParse(e['created_at']?.toString() ?? '');
+
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: PixelCard(
+            backgroundColor: AppColors.surface,
+            child: InkWell(
+              onTap: () => _openRecordMenu(e),
+              child: Row(
+                children: [
+                   Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                        color: isIncome ? AppColors.secondary.withValues(alpha: 0.2) : Colors.redAccent.withValues(alpha: 0.1),
+                        border: Border.all(color: AppColors.text, width: 2),
+                      ),
+                      child: Icon(
+                        isIncome ? Icons.north_east : Icons.south_west,
+                        color: AppColors.text,
+                        size: 20,
+                      ),
+                    ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: Text(title, style: AppTextStyles.pixelHeader.copyWith(fontSize: 14))),
+                            if (hasDesc) const Icon(Icons.sticky_note_2_outlined, size: 12, color: AppColors.subtle),
+                          ],
+                        ),
+                        Text(
+                          category,
+                          style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    (isIncome ? '+' : '-') + currency.format(amount).replaceFirst('RM ', ''),
+                    style: AppTextStyles.pixelBody.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: isIncome ? AppColors.secondary : Colors.redAccent, 
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ));
+      }
+    });
+
+    return widgets;
   }
 
   @override
@@ -197,8 +314,42 @@ class _VaultPageState extends State<VaultPage> {
                    ),
 
                   const SizedBox(height: 24),
-                  Text('History', style: AppTextStyles.pixelHeader),
-                  const SizedBox(height: 8),
+                  
+                  // Sort Header Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('History', style: AppTextStyles.pixelHeader),
+                      Row(
+                        children: ['Day', 'Week', 'Month'].map((mode) {
+                          final isSelected = _sortMode == mode;
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: InkWell(
+                              onTap: () => setState(() => _sortMode = mode),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? AppColors.secondary : Colors.transparent,
+                                  border: isSelected ? Border.all(color: AppColors.text, width: 2) : null,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  mode,
+                                  style: AppTextStyles.pixelBody.copyWith(
+                                    fontSize: 10, 
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    color: isSelected ? AppColors.surface : AppColors.subtle,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
 
                   if (items.isEmpty)
                      Padding(
@@ -206,67 +357,7 @@ class _VaultPageState extends State<VaultPage> {
                       child: Center(child: Text('No records yet. Tap Add to start.', style: AppTextStyles.pixelBody)),
                     )
                   else
-                    ...items.map((e) {
-                      final title = (e['title'] ?? '-') as String;
-                      final isIncome = (e['is_income'] as bool?) ?? false;
-                      final categoryRaw = e['category'];
-                      final category = (categoryRaw ?? (isIncome ? 'Income' : 'Uncategorized')).toString();
-                      final amount = (e['amount'] as num?) ?? 0;
-                      final createdAt = DateTime.tryParse(e['created_at']?.toString() ?? '');
-                      final hasDesc = (e['description'] ?? '').toString().trim().isNotEmpty;
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: PixelCard(
-                          backgroundColor: AppColors.surface,
-                          child: InkWell(
-                            onTap: () => _openRecordMenu(e),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 40, height: 40,
-                                  decoration: BoxDecoration(
-                                    color: isIncome ? AppColors.secondary.withValues(alpha: 0.2) : Colors.redAccent.withValues(alpha: 0.1),
-                                    border: Border.all(color: AppColors.text, width: 2),
-                                  ),
-                                  child: Icon(
-                                    isIncome ? Icons.north_east : Icons.south_west,
-                                    color: AppColors.text,
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Expanded(child: Text(title, style: AppTextStyles.pixelHeader.copyWith(fontSize: 14))),
-                                          if (hasDesc) const Icon(Icons.sticky_note_2_outlined, size: 14),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '$category • ${createdAt == null ? '-' : DateFormat('dd MMM').format(createdAt)}',
-                                        style: AppTextStyles.pixelBody.copyWith(fontSize: 10, color: AppColors.subtle),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Text(
-                                  (isIncome ? '+' : '-') + currency.format(amount).replaceFirst('RM ', ''),
-                                  style: AppTextStyles.pixelBody.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: isIncome ? AppColors.secondary : Colors.redAccent, // Green is bad for pastel theme, using secondary (Mint)
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
+                    ..._buildGroupedList(currency),
 
                   const SizedBox(height: 60),
                 ],
@@ -422,8 +513,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
           ),
           const SizedBox(height: 12),
 
-          PixelInput(
-            hintText: 'Amount (e.g. 12.50)',
+          CurrencyInput(
+            hintText: '0.00',
             controller: amountCtrl,
           ),
           const SizedBox(height: 12),

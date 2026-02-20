@@ -17,6 +17,7 @@ class _SignInPageState extends State<SignInPage> {
 
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
+  final confirmPassCtrl = TextEditingController();
   
   bool isSignUp = false;
   bool loading = false;
@@ -26,6 +27,7 @@ class _SignInPageState extends State<SignInPage> {
   void dispose() {
     emailCtrl.dispose();
     passCtrl.dispose();
+    confirmPassCtrl.dispose();
     super.dispose();
   }
 
@@ -43,15 +45,30 @@ class _SignInPageState extends State<SignInPage> {
     setState(() => loading = true);
     try {
       if (isSignUp) {
-        await supabase.auth.signUp(email: email, password: pass);
+        final confirm = confirmPassCtrl.text.trim();
+        if (pass != confirm) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             const SnackBar(content: Text('Passwords do not match.')),
+           );
+           setState(() => loading = false);
+           return;
+        }
+
+        final res = await supabase.auth.signUp(email: email, password: pass);
+        
+        // Force manual login flow even if auto-login happened
+        if (res.session != null) {
+          await supabase.auth.signOut();
+        }
+
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(
+           const SnackBar(
              content: Text('Account created! Please sign in.'),
              backgroundColor: AppColors.secondary,
            ),
         );
-        setState(() => isSignUp = false); // Switch to sign in
+        setState(() => isSignUp = false); // Switch to sign in view
       } else {
         await supabase.auth.signInWithPassword(email: email, password: pass);
       }
@@ -79,16 +96,31 @@ class _SignInPageState extends State<SignInPage> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Background Image
-          Image.asset(
-            'assets/images/school_library_bg.png',
-            fit: BoxFit.cover,
+          // 1. Background Image - Responsive (Portrait vs Landscape)
+          Builder(
+            builder: (context) {
+              final size = MediaQuery.of(context).size;
+              final isLandscape = size.aspectRatio > 1.0;
+              final bgImage = isLandscape 
+                  ? 'assets/images/horizontal_bg.png' 
+                  : 'assets/images/school_library_bg.png';
+
+              return SizedBox(
+                height: double.infinity,
+                width: double.infinity,
+                child: Image.asset(
+                  bgImage,
+                  fit: BoxFit.cover, 
+                  alignment: Alignment.topCenter, 
+                ),
+              );
+            }
           ),
           
           // 2. Dark Overlay if inputs are shown (to focus attention)
           AnimatedOpacity(
             duration: const Duration(milliseconds: 300),
-            opacity: showInputs ? 0.4 : 0.0,
+            opacity: showInputs ? 0.6 : 0.0, 
             child: Container(color: Colors.black),
           ),
 
@@ -96,8 +128,8 @@ class _SignInPageState extends State<SignInPage> {
           SafeArea(
             child: Column(
               children: [
-                // Logo/Title area (Now part of Background)
-                const Spacer(flex: 4), 
+                // Spacer to push button down (Image contains title)
+                const Spacer(), 
 
                 // Floating "Start" Button (Hidden when inputs shown)
                 if (!showInputs)
@@ -111,7 +143,7 @@ class _SignInPageState extends State<SignInPage> {
                            onPressed: () => setState(() => showInputs = true),
                            width: 160,
                            height: 60,
-                           color: AppColors.secondary, // Chalkboard Green
+                           color: AppColors.secondary,
                            textColor: Colors.white,
                         ),
                       ],
@@ -121,9 +153,9 @@ class _SignInPageState extends State<SignInPage> {
             ),
           ),
 
-          // 4. Floating Input Panel (Animated popup)
+          // 5. Floating Input Panel (Animated popup)
           if (showInputs)
-            Center(
+             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: PixelCard(
@@ -150,6 +182,10 @@ class _SignInPageState extends State<SignInPage> {
                       PixelInput(hintText: 'Email', controller: emailCtrl),
                       const SizedBox(height: 12),
                       PixelInput(hintText: 'Password', controller: passCtrl, obscureText: true),
+                      if (isSignUp) ...[
+                        const SizedBox(height: 12),
+                        PixelInput(hintText: 'Confirm Password', controller: confirmPassCtrl, obscureText: true),
+                      ],
                       const SizedBox(height: 24),
 
                       PixelButton(

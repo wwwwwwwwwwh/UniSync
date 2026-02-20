@@ -20,11 +20,11 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int index = 0;
 
-  final pages = const [
-    DashboardPage(),
-    VaultPage(),
-    FocusPage(),
-    MindPage(),
+  List<Widget> get _pages => [
+    DashboardPage(onNavigate: (i) => setState(() => index = i)),
+    const VaultPage(),
+    const FocusPage(),
+    const MindPage(),
   ];
 
   @override
@@ -44,9 +44,29 @@ class _HomeShellState extends State<HomeShell> {
               tooltip: 'Logout',
               icon: const Icon(Icons.logout, color: AppColors.text),
               onPressed: () async {
-                await Supabase.instance.client.auth.signOut();
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: Text('Leaving so soon?', style: AppTextStyles.pixelHeader),
+                    content: Text('Are you sure you want to log out?', style: AppTextStyles.pixelBody),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text('Stay', style: AppTextStyles.pixelButton),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: Text('Logout', style: AppTextStyles.pixelButton.copyWith(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm == true) {
+                  await Supabase.instance.client.auth.signOut();
+                }
               },
-                     ),
+             ),
            ),
         ],
         bottom: PreferredSize(
@@ -57,7 +77,7 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
       ),
-      body: pages[index],
+      body: _pages[index],
       bottomNavigationBar: _PixelBottomBar(
         currentIndex: index,
         onTap: (i) => setState(() => index = i),
